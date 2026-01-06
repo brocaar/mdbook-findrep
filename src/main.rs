@@ -34,7 +34,7 @@ impl Preprocessor for FindRep {
         book.for_each_mut(|section: &mut BookItem| {
             if let BookItem::Chapter(c) = section {
                 for (k, v) in &kv {
-                    c.content = c.content.replace(&format!("${}", k.to_uppercase()), v);
+                    c.content = c.content.replace(&format!("%{}", k.to_uppercase()), v);
                 }
             }
         });
