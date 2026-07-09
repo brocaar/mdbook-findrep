@@ -2,14 +2,16 @@ use std::collections::HashMap;
 use std::{io, process};
 
 use clap::{Arg, Command};
-use mdbook::book::{Book, BookItem};
-use mdbook::errors::Error;
-use mdbook::preprocess::{CmdPreprocessor, Preprocessor, PreprocessorContext};
-use semver::{Version, VersionReq};
+use mdbook_preprocessor::book::{Book, BookItem};
+use mdbook_preprocessor::errors::Error;
+use mdbook_preprocessor::{Preprocessor, PreprocessorContext, parse_input};
+use toml::value::Value;
 
 struct FindRep;
 
 impl FindRep {
+    const NAME: &str = "findrep";
+
     fn new() -> FindRep {
         FindRep
     }
@@ -17,16 +19,17 @@ impl FindRep {
 
 impl Preprocessor for FindRep {
     fn name(&self) -> &str {
-        "findrep"
+        Self::NAME
     }
 
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
         let mut kv: HashMap<String, String> = HashMap::new();
+        let preprocessors = ctx.config.preprocessors::<Value>()?;
 
-        if let Some(cfg) = ctx.config.get_preprocessor(self.name()) {
-            for (k, v) in cfg {
-                if let Some(s) = v.as_str() {
-                    kv.insert(k.to_string(), s.to_string());
+        if let Some(config) = preprocessors.get(FindRep::NAME) {
+            if let Some(table) = config.as_table() {
+                for (k, v) in table {
+                    kv.insert(k.to_string(), v.as_str().unwrap_or_default().into());
                 }
             }
         }
@@ -66,17 +69,14 @@ fn main() {
 }
 
 fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
-    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
+    let (ctx, book) = parse_input(io::stdin())?;
 
-    let book_version = Version::parse(&ctx.mdbook_version)?;
-    let version_req = VersionReq::parse(mdbook::MDBOOK_VERSION)?;
-
-    if !version_req.matches(&book_version) {
+    if ctx.mdbook_version != mdbook_preprocessor::MDBOOK_VERSION {
         eprintln!(
             "Warning: The {} plugin was built against version {} of mdbook, \
              but we're being called from version {}",
             pre.name(),
-            mdbook::MDBOOK_VERSION,
+            mdbook_preprocessor::MDBOOK_VERSION,
             ctx.mdbook_version
         );
     }
